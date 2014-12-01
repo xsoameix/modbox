@@ -1,0 +1,17 @@
+# Compiled air
+air
+
+# Build files
+CMakeFiles/
+cmake_install.cmake
+CMakeCache.txt
+Makefile
+
+# Vim editor
+*.swp
+
+# objects
+*.c.c
+
+# config
+config.h
