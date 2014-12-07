@@ -86,12 +86,13 @@ int
 :recv(self, client_t * client) {
   atcp_t atcp = {0};
   int ret = ·read_atcp(&atcp);
-  if (ret == -1 || atcp.close) return 0;
+  if (ret == -1) return 0;
   Worker.print_atcp(&atcp);
   //client·send(&atcp);
   //mtcp_t mtcp = client·recv(atcp.readlen);
   mtcp_t mtcp = Client.mtcp_create(&atcp);
   ·send(&atcp, &mtcp);
+  if (atcp.close) return 0;
   return 1;
 }
 
