@@ -1,0 +1,7 @@
+set(TEST_PROJECT "test_${PROJECT}")
+enable_testing()
+find_package(Check REQUIRED)
+file(GLOB_RECURSE TEST_PROJECT_SOURCES "*.c.c")
+add_executable(${TEST_PROJECT} ${TEST_PROJECT_SOURCES})
+target_link_libraries(${TEST_PROJECT} ${LIBS} ${CHECK_LIBRARIES})
+add_test(${TEST_PROJECT} ${CMAKE_CURRENT_BANARY_DIR}/${PROJECT})

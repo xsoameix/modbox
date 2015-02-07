@@ -10,22 +10,35 @@ typedef struct sockaddr    addr_t;
 
 #define air_tcp_struct \
   uint8_t unit; \
-  uint8_t op; \
+  union { \
+    int8_t err; \
+    uint8_t op; \
+  }; \
   uint8_t panel; \
   uint8_t addr; \
   uint16_t data
 
 typedef struct {
   uint8_t close;
-  uint8_t readlen;
+  uint8_t len;
   air_tcp_struct;
 } atcp_t; // air tcp
 
+#define modbus_head_struct \
+  uint16_t txn;  /* transaction id */ \
+  uint16_t prot; /* protocol */ \
+  uint16_t len
+
 typedef struct {
-  uint16_t txn;  // transaction id
-  uint16_t prot; // protocol
-  uint16_t len;
+  modbus_head_struct;
+} mhead_t; // modbus header
+
+typedef struct {
+  modbus_head_struct;
   air_tcp_struct;
 } mtcp_t; // modbus tcp
+
+#define ATCP_GROUP 0x0
+#define ATCP_SET 0x6
 
 #endif

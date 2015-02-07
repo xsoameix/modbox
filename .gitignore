@@ -1,17 +1,26 @@
 # Compiled air
 air
 
+# Scripts
+scripts/save_fixtures
+
+# Test
+test/test_air
+
 # Build files
 CMakeFiles/
 cmake_install.cmake
 CMakeCache.txt
+CTestTestfile.cmake
 Makefile
+compile.sh
 
 # Vim editor
 *.swp
 
-# objects
+# objects & package
 *.c.c
+libair*
 
 # config
 config.h

@@ -38,62 +38,60 @@ void
   free(self);
 }
 
+void
+:close(self, char * err) {
+  perror(err);
+  longjmp(* @fail, 1);
+}
+
+void
+:recv(self, void * buf, size_t len) {
+  ssize_t ret = recv(@sockfd, buf, len, 0);
+  if (ret == 0)        ·close("airweb disconnected");
+  else if (ret == -1)  ·close("recv from airweb failed");
+  else if (ret != len) ·close("recv from airweb failed");
+}
+
 int
-:read_atcp(self, atcp_t * atcp) {
-  ssize_t ret = read(@sockfd, atcp, sizeof(atcp));
-  if (ret == 0) {
-    perror("client disconnected");
-    return -1;
-  } else if (ret == -1) {
-    perror("read failed");
-    return -1;
-  }
+:read(self, atcp_t * atcp) {
+  ·recv(atcp, sizeof(atcp));
   atcp->data = ntohs(atcp->data);
 }
 
 atcp_t
-:atcp_create(atcp_t * atcp, mtcp_t * recv) {
-  return (atcp_t) {
-    .close = atcp->close, .readlen = atcp->readlen,
-    .unit = recv->unit, .panel = recv->panel, .op = recv->op,
-    .addr = recv->addr, .data = recv->data
-  };
+:create_atcp(self, mtcp_t * mtcp, atcp_t * atcp) {
+  return (atcp_t)      {.close = atcp->close, .len = atcp->len,
+    .unit = mtcp->unit, .panel = mtcp->panel, .op = mtcp->op,
+    .addr = mtcp->addr, .data = mtcp->data};
 }
 
 void
-:send(self, atcp_t * atcp, mtcp_t * recv) {
-  atcp_t send = Worker.atcp_create(atcp, recv);
-  ssize_t ret = write(@sockfd, &send, sizeof(send));
-  if (ret == 0) {
-    perror("air server disconnected");
-    longjmp(* @fail, 1);
-  } else if (ret == -1) {
-    perror("send to air server failed");
-    longjmp(* @fail, 1);
-  }
+:send(self, void * buf, size_t len) {
+  ssize_t ret = send(@sockfd, buf, len, 0);
+  if (ret == -1)       ·close("send to airweb failed");
+  else if (ret != len) ·close("send to airweb mismatch");
 }
 
 void
-:print_atcp(atcp_t * atcp) {
-  printf("recv atcp:\n"
-         "  unit:  %hhX  op:    %hhX  panel: %hhX"
-         "  addr:  %hhX  data:  %hX\n",
-         atcp->unit, atcp->op, atcp->panel,
-         atcp->addr, atcp->data);
+:write(self, mtcp_t * mtcp, atcp_t * atcp) {
+  atcp_t send = ·create_atcp(mtcp, atcp);
+  ·send(&send, sizeof(send));
+}
+
+void
+:print_atcp(self, atcp_t * atcp) {
+  printf("recv unit:  %hhX  op:  %hhX  panel: %hhX  addr:  %hhX  data:  %hX\n",
+         atcp->unit, atcp->op, atcp->panel, atcp->addr, atcp->data);
 }
 
 int
-:recv(self, client_t * client) {
+:pass_back(self, client_t * client) {
   atcp_t atcp = {0};
-  int ret = ·read_atcp(&atcp);
-  if (ret == -1) return 0;
-  Worker.print_atcp(&atcp);
-  //client·send(&atcp);
-  //mtcp_t mtcp = client·recv(atcp.readlen);
-  mtcp_t mtcp = Client.mtcp_create(&atcp);
-  ·send(&atcp, &mtcp);
-  if (atcp.close) return 0;
-  return 1;
+  ·read(&atcp);
+  ·print_atcp(&atcp);
+  mtcp_t mtcp = client·get_mtcp(&atcp);
+  ·write(&mtcp, &atcp);
+  return atcp.close == 0;
 }
 
 void *
@@ -103,9 +101,9 @@ void *
   client_t * client = 0;
   int failed = setjmp(fail);
   if (!failed) {
-    client = Client.create(&fail);
-    //client·connect;
-    while (·recv(client));
+    client = Client.new(&fail);
+    client·connect;
+    while (·pass_back(client));
   }
   client·free;
   ·free;
@@ -117,7 +115,7 @@ int
   pthread_t thread;
   int create = pthread_create(&thread, 0, Worker.run, &fd);
   if (create == -1) {
-    perror("could not cerate thread");
+    perror("air server could not cerate thread");
     return -1;
   }
   return 0;
@@ -130,13 +128,17 @@ int
   }
 }
 
+void
+:close(self, char * err) {
+  perror(err);
+  ·free;
+  exit(0);
+}
+
 int
-:create_socket(void) {
+:create_socket(self) {
   int sockfd = socket(PF_INET, SOCK_STREAM, 0);
-  if (sockfd == -1) {
-    perror("socket failed");
-    exit(0);
-  }
+  if (sockfd == -1) ·close("air server socket failed");
   return sockfd;
 }
 
@@ -144,13 +146,13 @@ int
 :new(void) {
   · * self = calloc(1, sizeof(·));
   @class = &Server;
-  @sockfd = Server.create_socket();
+  @sockfd = ·create_socket;
   return self;
 }
 
 void
 :free(self) {
-  close(@sockfd);
+  if (@sockfd) close(@sockfd);
   free(self);
 }
 
@@ -165,32 +167,21 @@ addr_in_t
 
 void
 :bind(self, addr_in_t * addr) {
-  int ret = bind(@sockfd, (addr_t *) addr,
-                 sizeof(addr_t));
-  if (ret == -1) {
-    perror("bind failed");
-    exit(0);
-  }
+  int ret = bind(@sockfd, (addr_t *) addr, sizeof(addr_t));
+  if (ret == -1) ·close("air server bind failed");
 }
 
 void
 :setsockopt(self) {
   int on = 1;
-  int ret = setsockopt(@sockfd, SOL_SOCKET,
-                       SO_REUSEADDR, &on, sizeof(on));
-  if (ret == -1) {
-    perror("setsockopt failed");
-    exit(0);
-  }
+  int ret = setsockopt(@sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+  if (ret == -1) ·close("air server setsockopt failed");
 }
 
 void
 :listen(self, uint16_t port) {
   int ret = listen(@sockfd, 20);
-  if (ret == -1) {
-    perror("listen failed");
-    exit(0);
-  }
+  if (ret == -1) ·close("listen failed");
   printf("Listening on port %" PRIu16 "\n", port);
 }
 
@@ -202,25 +193,36 @@ void
 }
 
 void
-:set_interrupt(void) {
+:set_interrupt(self) {
   void (* sig)(int) = signal(SIGINT, Server.interrupt);
-  if (sig == SIG_ERR) {
-    perror("Can't catch SIGINT");
-    exit(0);
-  }
+  if (sig == SIG_ERR) ·close("air server can't catch SIGINT");
+}
+
+int
+:is_from_airweb(self, addr_in_t * client) {
+  addr_in_t airweb = {0};
+  addr_in_t localhost = {0};
+  inet_aton(AIRWEB_IP, &airweb.sin_addr);
+  inet_aton("127.0.0.1", &localhost.sin_addr);
+  if (client->sin_addr.s_addr == airweb.sin_addr.s_addr ||
+      client->sin_addr.s_addr == localhost.sin_addr.s_addr) return 1;
+  return 0;
 }
 
 void
 :accept(self) {
-  Server.set_interrupt();
+  ·set_interrupt;
   int leave = setjmp(catch);
   if (leave) return;
   while (1) {
     addr_in_t client_addr = {0};
-    int client_addr_len = {0};
+    socklen_t client_addr_len = sizeof(client_addr);
     int fd = accept(@sockfd, (addr_t *) &client_addr, &client_addr_len);
     if (fd == -1) {
-      perror("accept failed");
+      perror("air server accept failed");
+      continue;
+    } else if (!·is_from_airweb(&client_addr)) {
+      close(fd);
       continue;
     }
     int ret = Worker.thread(fd);
@@ -237,10 +239,4 @@ void
   ·listen(port);
   ·accept;
   ·free;
-}
-
-int
-main(void) {
-  Server.run(SERVER_PORT);
-  return 0;
 }
