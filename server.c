@@ -54,15 +54,19 @@ void
 
 int
 :read(self, atcp_t * atcp) {
-  ·recv(atcp, sizeof(atcp));
+  ·recv(atcp, sizeof(* atcp));
   atcp->data = ntohs(atcp->data);
 }
 
-atcp_t
-:create_atcp(self, mtcp_t * mtcp, atcp_t * atcp) {
-  return (atcp_t)      {.close = atcp->close, .len = atcp->len,
-    .unit = mtcp->unit, .panel = mtcp->panel, .op = mtcp->op,
-    .addr = mtcp->addr, .data = mtcp->data};
+void
+:print_mtcp(self, mbuf_t * buf, size_t len) {
+  printf("recv");
+  size_t i = 0;
+  for (; i < len; i++) {
+    printf(" %02X", ((uint8_t *) buf)[i]);
+  }
+  putchar('\n');
+  fflush(stdout);
 }
 
 void
@@ -73,25 +77,20 @@ void
 }
 
 void
-:write(self, mtcp_t * mtcp, atcp_t * atcp) {
-  atcp_t send = ·create_atcp(mtcp, atcp);
-  ·send(&send, sizeof(send));
-}
-
-void
-:print_atcp(self, atcp_t * atcp) {
-  printf("recv unit:  %hhX  op:  %hhX  panel: %hhX  addr:  %hhX  data:  %hX\n",
-         atcp->unit, atcp->op, atcp->panel, atcp->addr, atcp->data);
+:write(self, mbuf_t * buf, size_t len) {
+  ·send(OFFSET(buf, sizeof(mhead_t)), len - sizeof(mhead_t));
 }
 
 int
 :pass_back(self, client_t * client) {
   atcp_t atcp = {0};
   ·read(&atcp);
-  ·print_atcp(&atcp);
-  mtcp_t mtcp = client·get_mtcp(&atcp);
-  ·write(&mtcp, &atcp);
-  return atcp.close == 0;
+  if (atcp.op == ATCP_CLOSE) return 0;
+  mbuf_t buf = {0};
+  size_t len = client·get_mtcp(&buf, &atcp);
+  ·print_mtcp(&buf, len);
+  ·write(&buf, len);
+  return 1;
 }
 
 void *

@@ -48,20 +48,28 @@ addr_in_t
 
 void
 :connect(self) {
-  printf("connect socket ... ");
-  fflush(stdout);
   @sockfd = ·create_socket;
   addr_in_t addr = ·build_addr(CLIENT_PORT);
   int ret = connect(@sockfd, (addr_t *) &addr, sizeof(addr_t));
   if (ret == -1) ·close("air client connect failed");
-  printf("OK\n");
+  puts("modbus connected");
+  fflush(stdout);
 }
 
-mtcp_t
-:create_mtcp(self, atcp_t * atcp) {
-  return (mtcp_t)      {.txn = 0, .prot = 0, .len = htons(5),
+void
+:print_atcp(self, atcp_t * atcp) {
+  printf("send unit:  %hhX  op:  %hhX  panel: %hhX  addr:  %hhX  data:  %hX\n",
+         atcp->unit, atcp->op, atcp->panel, atcp->addr, atcp->data);
+  fflush(stdout);
+}
+
+void
+:create_mtcp(self, mtcp_t * mtcp, atcp_t * atcp) {
+  mhead_in_t head = {.txn = 0, .prot = 0, .len = htons(sizeof(head))};
+  * mtcp = (mtcp_t) {
     .unit = atcp->unit, .panel = atcp->panel, .op = atcp->op,
     .addr = atcp->addr, .data = htons(atcp->data)};
+  memcpy(&mtcp->head, &head, sizeof(head));
 }
 
 void
@@ -73,12 +81,10 @@ void
 
 void
 :write(self, atcp_t * atcp) {
-  //printf("sending mtcp ... ");
-  //fflush(stdout);
-  mtcp_t mtcp = ·create_mtcp(atcp);
+  ·print_atcp(atcp);
+  mtcp_t mtcp = {0};
+  ·create_mtcp(&mtcp, atcp);
   ·send(&mtcp, sizeof(mtcp));
-  //printf("OK");
-  //fflush(stdout);
 }
 
 #define BAUD_RATE 9600 // bits per second
@@ -102,38 +108,28 @@ void
   else if (ret != len) ·close("recv from modbus mismatch");
 }
 
-void
-:print_mtcp(self, mtcp_t * mtcp) {
-  printf("recv mtcp:\n"
-         "  txn:   %hhX  prot:  %hhX  len:   %hhX\n"
-         "  unit:  %hhX  op:    %hhX  panel: %hhX\n"
-         "  addr:  %hhX  data:  %hX\n",
-         mtcp->txn, mtcp->prot, mtcp->len,
-         mtcp->unit, mtcp->op, mtcp->panel,
-         mtcp->addr, mtcp->data);
-}
+#define GLEN sizeof(mget_t) // get len
+#define SLEN sizeof(mset_t) // set len
 
-#define OFFSET(structure, offset) ((uint8_t *) &structure + offset)
-
-mtcp_t
-:read(self, atcp_t * atcp) {
-  mtcp_t mtcp = {0};
-  size_t l, len = 0;
-  l = sizeof(mhead_t), ·recv(&mtcp, l),                    len += l;
-  l = ntohs(mtcp.len), ·recv(OFFSET(mtcp, len), l),        len += l;
-  if (atcp->panel != ATCP_GROUP && atcp->op == ATCP_SET && mtcp.err >= 0) {
-    l = sizeof(mtcp_t) - len, ·recv(OFFSET(mtcp, len), l), len += l;
+size_t
+:read(self, mbuf_t * buf, atcp_t * atcp) {
+  ·recv(buf, GLEN);
+  mget_t * get = (mget_t *) buf;
+  if (get->err < 0) return GLEN;
+  if (atcp->op == ATCP_GET) {
+    ·recv(OFFSET(buf, GLEN), get->size);
+    return GLEN + get->size;
+  } else {
+    ·recv(OFFSET(buf, GLEN), SLEN - GLEN);
+    return SLEN;
   }
-  //·print_mtcp(&mtcp);
-  atcp->len = len - sizeof(mhead_t);
-  return mtcp;
 }
 
-mtcp_t
-:get_mtcp(self, atcp_t * atcp) {
+size_t
+:get_mtcp(self, mbuf_t * buf, atcp_t * atcp) {
   ·write(atcp);
   ·wait;
-  return ·read(atcp);
+  return ·read(buf, atcp);
 }
 
 · *

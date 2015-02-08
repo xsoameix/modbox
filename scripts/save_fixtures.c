@@ -59,7 +59,8 @@ range_data(wcmd_t * wcmd, uint8_t index, data_t * ret) {
 
 #define LENOF(ary) (sizeof(ary) / sizeof(ary[0]))
 #define LASTOF(ary) ((ary)[LENOF(ary) - 1])
-#define ARGSOF(ary) ary, sizeof(ary[0]), LENOF(ary)
+#define ALLOF(ary) ary, sizeof(ary[0]), LENOF(ary)
+#define SLICEOF(ary, len) ary, sizeof(ary[0]), len
 #define ELEM(cmd, gaddr, data) {&cmd, gaddr, elem_data, data, LENOF(data)}
 #define RANGE(cmd, gaddr, data) {&cmd, gaddr, range_data, &data, UINT8_MAX}
 
@@ -102,13 +103,13 @@ save_head(FILE * fixture) {
 }
 
 void
-recv_sock(FILE * fixture, client_t * client,
-          mtcp_t * mtcp, atcp_t * atcp, char * addr, char * data) {
+recv_sock(FILE * fixture, client_t * client, mbuf_t * buf, size_t len,
+          atcp_t * atcp, char * addr, char * data) {
   fprintf(fixture, "%4u %5u %s %-9s %-5s ", atcp->unit, atcp->panel,
           atcp->op == GET ? "get" : "set", addr, data);
   uint8_t i = 0;
-  for (; i < sizeof(mhead_t) + atcp->len; i++) {
-    fprintf(fixture, " %02X", ((uint8_t *) mtcp)[i]);
+  for (; i < len; i++) {
+    fprintf(fixture, " %02X", ((uint8_t *) buf)[i]);
   }
   fputc('\n', fixture);
   fflush(fixture);
@@ -117,8 +118,9 @@ recv_sock(FILE * fixture, client_t * client,
 void
 send_sock(FILE * fixture, client_t * client,
           atcp_t * atcp, char * addr, char * data) {
-  mtcp_t mtcp = client·get_mtcp(atcp);
-  recv_sock(fixture, client, &mtcp, atcp, addr, data);
+  mbuf_t buf = {0};
+  size_t len = client·get_mtcp(&buf, atcp);
+  recv_sock(fixture, client, &buf, len, atcp, addr, data);
   printf(".");
   fflush(stdout);
 }
@@ -149,17 +151,19 @@ typedef struct {
   client_t * client;
   uint8_t unit;
   uint8_t panel;
+  uint8_t pbegin; // panel begin
+  uint8_t pend;   // panel end
 } bind_t;
 
-typedef void each_panel_t(void *, bind_t *);
+typedef void each_cmd_t(void *, bind_t *);
 
 void
 for_each_cmds(void * cmds, size_t size, size_t len,
-              each_panel_t * itor, bind_t * bind) {
+              each_cmd_t * itor, bind_t * bind) {
   uint8_t unit = 1;
   for (; unit <= 2; unit++) {
-    uint8_t panel = 1;
-    for (; panel <= 2; panel++) {
+    uint8_t panel = bind->pbegin;
+    for (; panel <= bind->pend; panel++) {
       uint8_t cmd_i = 0;
       for (; cmd_i < len; cmd_i++) {
         bind->unit = unit;
@@ -168,6 +172,23 @@ for_each_cmds(void * cmds, size_t size, size_t len,
       }
     }
   }
+}
+
+#define PANELS .pbegin = 1, .pend = 2
+#define PANEL .pbegin = 0, .pend = 0
+
+void
+itor_read_all_cmd(void * item, bind_t * bind) {
+  cmd_t * cmd = * (cmd_t **) item;
+  atcp_t sock = {.unit = bind->unit, .panel = bind->panel,
+    .op = GET,   .addr = cmd->addr,  .data = 0xF};
+  send_sock(bind->fixture, bind->client, &sock, cmd->name, "15");
+}
+
+void
+save_read_all_snapshots(FILE * fixture, client_t * client) {
+  bind_t bind = {fixture, client, PANELS};
+  for_each_cmds(SLICEOF(cmds, 1), itor_read_all_cmd, &bind);
 }
 
 void
@@ -180,8 +201,8 @@ itor_read_cmd(void * item, bind_t * bind) {
 
 void
 save_read_snapshots(FILE * fixture, client_t * client) {
-  bind_t bind = {fixture, client};
-  for_each_cmds(ARGSOF(cmds), itor_read_cmd, &bind);
+  bind_t bind = {fixture, client, PANELS};
+  for_each_cmds(ALLOF(cmds), itor_read_cmd, &bind);
 }
 
 typedef struct wbind {
@@ -216,8 +237,8 @@ itor_data(void * item, bind_t * bind) {
 
 void
 save_write_snapshots(FILE * fixture, client_t * client) {
-  wbind_t bind = {{fixture, client}, .itor = itor_write_cmd};
-  for_each_cmds(ARGSOF(wcmds), itor_data, (bind_t *) &bind);
+  wbind_t bind = {{fixture, client, PANELS}, .itor = itor_write_cmd};
+  for_each_cmds(ALLOF(wcmds), itor_data, (bind_t *) &bind);
 }
 
 void
@@ -231,23 +252,9 @@ itor_gwrite_cmd(wcmd_t * wcmd, wbind_t * wbind) {
 }
 
 void
-for_each_wcmds(void * cmds, size_t size, size_t len,
-               each_panel_t * itor, bind_t * bind) {
-  uint8_t unit = 1;
-  for (; unit <= 2; unit++) {
-    uint8_t cmd_i = 0;
-    for (; cmd_i < len; cmd_i++) {
-      bind->unit = unit;
-      bind->panel = 0;
-      itor(cmds + size * cmd_i, bind);
-    }
-  }
-}
-
-void
 save_gwrite_snapshots(FILE * fixture, client_t * client) {
-  wbind_t bind = {{fixture, client}, .itor = itor_gwrite_cmd};
-  for_each_wcmds(ARGSOF(wcmds), itor_data, (bind_t *) &bind);
+  wbind_t bind = {{fixture, client, PANEL}, .itor = itor_gwrite_cmd};
+  for_each_cmds(ALLOF(wcmds), itor_data, (bind_t *) &bind);
 }
 
 void
@@ -257,6 +264,7 @@ save_fixtures(client_t * client) {
     save_head(fixture);
     save_err_op_snapshots(fixture, client);
     save_read_err_snapshots(fixture, client);
+    save_read_all_snapshots(fixture, client);
     save_read_snapshots(fixture, client);
     save_write_err_snapshots(fixture, client);
     save_write_snapshots(fixture, client);
