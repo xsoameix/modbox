@@ -7,8 +7,14 @@
 typedef struct sockaddr_in addr_in_t;
 typedef struct sockaddr    addr_t;
 
+typedef struct {
+  uint16_t txn;  /* transaction id */
+  uint16_t prot; /* protocol */
+  uint16_t len;
+} mhead_in_t;
+
 #define mhead_struct \
-  uint8_t head[6]
+  uint8_t head[sizeof(mhead_in_t)]
 #define ahead_struct \
   uint8_t unit; \
   union { \
@@ -40,12 +46,6 @@ typedef struct {
 typedef struct {
   mhead_struct;
 } mhead_t;
-
-typedef struct {
-  uint16_t txn;  /* transaction id */
-  uint16_t prot; /* protocol */
-  uint16_t len;
-} mhead_in_t;
 
 typedef mset_t mtcp_t;
 
