@@ -52,7 +52,7 @@ void
   else if (ret != len) ·close("recv from airweb failed");
 }
 
-int
+void
 :read(self, atcp_t * atcp) {
   ·recv(atcp, sizeof(* atcp));
   atcp->data = ntohs(atcp->data);
@@ -82,15 +82,15 @@ void
 }
 
 int
-:pass_back(self, client_t * client) {
+:proxy(self, client_t * client) {
   atcp_t atcp = {0};
   ·read(&atcp);
-  if (atcp.op == ATCP_CLOSE) return 0;
+  if (atcp.op == ATCP_CLOSE) return 1;
   mbuf_t buf = {0};
   size_t len = client·get_mtcp(&buf, &atcp);
   ·print_mtcp(&buf, len);
   ·write(&buf, len);
-  return 1;
+  return 0;
 }
 
 void *
@@ -102,7 +102,7 @@ void *
   if (!failed) {
     client = Client.new(&fail);
     client·connect;
-    while (·pass_back(client));
+    while (·proxy(client) == 0);
   }
   client·free;
   ·free;
@@ -198,14 +198,14 @@ void
 }
 
 int
-:is_from_airweb(self, addr_in_t * client) {
+:check_ip(self, addr_in_t * client) {
   addr_in_t airweb = {0};
   addr_in_t localhost = {0};
   inet_aton(AIRWEB_IP, &airweb.sin_addr);
   inet_aton("127.0.0.1", &localhost.sin_addr);
   if (client->sin_addr.s_addr == airweb.sin_addr.s_addr ||
-      client->sin_addr.s_addr == localhost.sin_addr.s_addr) return 1;
-  return 0;
+      client->sin_addr.s_addr == localhost.sin_addr.s_addr) return 0;
+  return 1;
 }
 
 void
@@ -220,7 +220,8 @@ void
     if (fd == -1) {
       perror("air server accept failed");
       continue;
-    } else if (!·is_from_airweb(&client_addr)) {
+    } else if (·check_ip(&client_addr)) {
+      perror("air server rejected");
       close(fd);
       continue;
     }
