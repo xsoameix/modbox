@@ -6,7 +6,7 @@
 #include <check.h>
 #include "../mtcp.h"
 
-:require "client.c"
+:require "../client.c"
 
 :class Test {}
 
