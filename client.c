@@ -95,17 +95,43 @@ void
   (uint64_t) MAX_BYTES_PER_ROUND * BITS_PER_BYTE * NANOSECOND / BAUD_RATE
 
 void
-:wait(self) {
-  struct timespec time = {0, SLEEP_TIME}, rem;
+:wait(self, atcp_t * atcp) {
+  time_t sec = atcp->op == ATCP_GET ? 0 : 0;
+  struct timespec time = {sec, SLEEP_TIME}, rem;
   nanosleep(&time, &rem);
 }
 
-void
+ssize_t
+:pull(self, void * buf, size_t len) {
+  ssize_t ret = -1;
+  ssize_t i = 0;
+  for (; i < len; ) {
+    ret = recv(@sockfd, buf, len - i, MSG_DONTWAIT);
+    printf("ret %zd len %zu", ret, len);
+    int j = 0;
+    for (; j < ret; j++) {
+      printf(" %02X", ((uint8_t *) buf)[j]);
+    }
+    putchar('\n');
+    fflush(stdout);
+    if (ret <= 0) {
+      return ret;
+    } else {
+      i += ret;
+    }
+  }
+  return ret;
+}
+
+int
 :recv(self, void * buf, size_t len) {
-  ssize_t ret = recv(@sockfd, buf, len, 0);
-  if (ret == 0)        ·close("modbus disconnected");
-  else if (ret == -1)  ·close("recv from modbus failed");
-  else if (ret != len) ·close("recv from modbus mismatch");
+  ssize_t ret = ·pull(buf, len);
+  if (ret == 0) {
+    ·close("modbus disconnected");
+  } else if (ret == -1 && errno != EAGAIN && errno != EWOULDBLOCK) {
+    ·close("recv from modbus failed");
+  }
+  //else if (ret != len) ·close("recv from modbus mismatch");
 }
 
 #define GLEN sizeof(mget_t) // get len
@@ -128,7 +154,7 @@ size_t
 size_t
 :get_mtcp(self, mbuf_t * buf, atcp_t * atcp) {
   ·write(atcp);
-  ·wait;
+  ·wait(atcp);
   return ·read(buf, atcp);
 }
 
