@@ -81,15 +81,19 @@ void
   ·send(OFFSET(buf, sizeof(mhead_t)), len - sizeof(mhead_t));
 }
 
-int
-:proxy(self, client_t * client) {
-  atcp_t atcp = {0};
-  ·read(&atcp);
-  if (atcp.op == ATCP_CLOSE) return 1;
+void
+:resend(self, client_t * client, atcp_t * atcp) {
   mbuf_t buf = {0};
-  size_t len = client·get_mtcp(&buf, &atcp);
+  size_t len = client·get_mtcp(&buf, atcp);
   ·print_mtcp(&buf, len);
   ·write(&buf, len);
+}
+
+int
+:proxy(self, client_t * client, atcp_t * atcp) {
+  ·read(atcp);
+  if (atcp->op == ATCP_CLOSE) return 1;
+  ·resend(client, atcp);
   return 0;
 }
 
@@ -98,12 +102,14 @@ void *
   jmp_buf wfail = {0}, cfail = {0};
   · * self = Worker.new(fd, &wfail);
   client_t * client = 0;
+  atcp_t atcp = {0};
   int wfailed = setjmp(wfail), cfailed = setjmp(cfail);
   if (cfailed) client·free;
   if (!wfailed) {
     client = Client.new(&cfail);
     client·connect;
-    while (·proxy(client) == 0);
+    if (cfailed) ·resend(client, &atcp);
+    while (·proxy(client, &atcp) == 0);
   }
   client·free;
   ·free;
