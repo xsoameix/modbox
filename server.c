@@ -95,12 +95,13 @@ int
 
 void *
 :run(void * fd) {
-  jmp_buf fail = {0};
-  · * self = Worker.new(fd, &fail);
+  jmp_buf wfail = {0}, cfail = {0};
+  · * self = Worker.new(fd, &wfail);
   client_t * client = 0;
-  int failed = setjmp(fail);
-  if (!failed) {
-    client = Client.new(&fail);
+  int wfailed = setjmp(wfail), cfailed = setjmp(cfail);
+  if (cfailed) client·free;
+  if (!wfailed) {
+    client = Client.new(&cfail);
     client·connect;
     while (·proxy(client) == 0);
   }
