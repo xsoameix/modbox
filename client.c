@@ -3,6 +3,8 @@
 #include <string.h>
 #include <errno.h>
 #include <setjmp.h>
+#include <time.h>
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <sys/types.h>
 #include <unistd.h>
