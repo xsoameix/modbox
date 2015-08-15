@@ -206,13 +206,11 @@ void
 
 int
 :check_ip(self, addr_in_t * client) {
-  addr_in_t airweb = {0};
-  addr_in_t localhost = {0};
-  inet_aton(AIRWEB_IP, &airweb.sin_addr);
-  inet_aton("127.0.0.1", &localhost.sin_addr);
-  if (client->sin_addr.s_addr == airweb.sin_addr.s_addr ||
-      client->sin_addr.s_addr == localhost.sin_addr.s_addr) return 0;
-  return 1;
+  addr_in_t docker, mask;
+  inet_aton("172.17.0.0", &docker.sin_addr);
+  inet_aton("255.255.0.0.", &mask.sin_addr);
+  return ((client->sin_addr.s_addr & mask.sin_addr.s_addr) !=
+          (docker.sin_addr.s_addr & mask.sin_addr.s_addr));
 }
 
 void
