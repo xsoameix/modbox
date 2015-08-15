@@ -8,6 +8,6 @@
 
 int
 main(void) {
-  Server.run(SERVER_PORT);
+  Server.run();
   return 0;
 }

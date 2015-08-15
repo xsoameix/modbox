@@ -9,11 +9,13 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "mtcp.h"
-#include "config.h"
+
+:require "common.c"
 
 :class Client {
 
   struct {
+    addr_info_t * addr;
     int sockfd;
   }
 }
@@ -21,6 +23,7 @@
 void
 :free(self) {
   if (@sockfd != -1) close(@sockfd);
+  if (@addr) freeaddrinfo(@addr);
   free(self);
 }
 
@@ -32,27 +35,28 @@ void
   longjmp(fail, 1);
 }
 
+addr_info_t *
+:build_addr(self) {
+  addr_info_t hint = {0}, * res;
+  hint.ai_family = AF_UNSPEC;
+  hint.ai_socktype = SOCK_STREAM;
+  getaddrinfo(Common.fetch_env_addr("CONNECT_ADDR", "127.0.0.1"),
+              Common.fetch_env_port("CONNECT_PORT", "60000"), &hint, &res);
+  return res;
+}
+
 int
 :create_socket(self) {
-  int fd = socket(AF_INET, SOCK_STREAM, 0);
+  int fd = socket(@addr->ai_family, @addr->ai_socktype, @addr->ai_protocol);
   if (fd == -1) ·close("air cilent socket failed");
   return fd;
 }
 
-addr_in_t
-:build_addr(self, uint16_t port) {
-  addr_in_t addr = {0};
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = inet_addr(CLIENT_IP);
-  addr.sin_port = htons(port);
-  return addr;
-}
-
 void
 :connect(self) {
+  @addr = ·build_addr;
   @sockfd = ·create_socket;
-  addr_in_t addr = ·build_addr(CLIENT_PORT);
-  int ret = connect(@sockfd, (addr_t *) &addr, sizeof(addr_t));
+  int ret = connect(@sockfd, @addr->ai_addr, @addr->ai_addrlen);
   if (ret == -1) ·close("air client connect failed");
   puts("modbus connected");
   fflush(stdout);
@@ -164,6 +168,7 @@ size_t
 :new(jmp_buf * raise) {
   · * self = calloc(1, sizeof(·));
   @class = &Client;
+  @addr = 0;
   @sockfd = -1;
   memcpy(&fail, raise, sizeof(fail));
   return self;

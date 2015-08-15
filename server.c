@@ -11,7 +11,6 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include "mtcp.h"
-#include "config.h"
 
 :require "client.c"
 
@@ -130,6 +129,7 @@ int
 :class Server {
 
   struct {
+    addr_info_t * addr;
     int sockfd;
   }
 }
@@ -141,9 +141,19 @@ void
   exit(0);
 }
 
+addr_info_t *
+:build_addr(self) {
+  addr_info_t hint = {0}, * res;
+  hint.ai_family = AF_UNSPEC;
+  hint.ai_socktype = SOCK_STREAM;
+  getaddrinfo(Common.fetch_env_addr("SENDER_ADDR", "127.0.0.1"),
+              Common.fetch_env_port("SENDER_PORT", "60000"), &hint, &res);
+  return res;
+}
+
 int
 :create_socket(self) {
-  int sockfd = socket(PF_INET, SOCK_STREAM, 0);
+  int sockfd = socket(@addr->ai_family, @addr->ai_socktype, @addr->ai_protocol);
   if (sockfd == -1) ·close("air server socket failed");
   return sockfd;
 }
@@ -152,6 +162,7 @@ int
 :new(void) {
   · * self = calloc(1, sizeof(·));
   @class = &Server;
+  @addr = ·build_addr;
   @sockfd = ·create_socket;
   return self;
 }
@@ -159,42 +170,48 @@ int
 void
 :free(self) {
   if (@sockfd) close(@sockfd);
+  if (@addr) freeaddrinfo(@addr);
   free(self);
 }
 
-addr_in_t
-:build_addr(self, uint16_t port) {
-  addr_in_t addr = {0};
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htons(INADDR_ANY);
-  addr.sin_port = htons(port);
-  return addr;
-}
-
 void
-:bind(self, addr_in_t * addr) {
-  int ret = bind(@sockfd, (addr_t *) addr, sizeof(addr_t));
+:bind(self) {
+  int ret = bind(@sockfd, @addr->ai_addr, @addr->ai_addrlen);
   if (ret == -1) ·close("air server bind failed");
 }
 
 void
 :setsockopt(self) {
-  int on = 1;
-  int ret = setsockopt(@sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
-  if (ret == -1) ·close("air server setsockopt failed");
+  int on = 1, ret;
+  ret = setsockopt(@sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+  if (ret == -1) ·close("air server setsockopt 'SO_REUSEADDR' failed");
+  if (@addr->ai_addr->sa_family == AF_INET6) {
+    ret = setsockopt(@sockfd, IPPROTO_IPV6, IPV6_V6ONLY, &on, sizeof(on));
+    if (ret == -1) ·close("air server setsockopt 'IPV6_V6ONLY' failed");
+  }
 }
 
 void
-:listen(self, uint16_t port) {
+:print_listen_info(self) {
+  char addr[INET6_ADDRSTRLEN];
+  in_port_t port;
+  Common.addr_ntop(@addr->ai_addr, addr, sizeof(addr));
+  Common.port_ntop(@addr->ai_addr, &port);
+  printf("Listening on %s:%" PRIu16 "\n", addr, port);
+}
+
+void
+:listen(self) {
   int ret = listen(@sockfd, 20);
   if (ret == -1) ·close("listen failed");
-  printf("Listening on port %" PRIu16 "\n", port);
+  ·print_listen_info;
 }
 
 static jmp_buf catch = {0};
 
 void
 :interrupt(int signo) {
+  putchar('\n');
   longjmp(catch, 1);
 }
 
@@ -204,30 +221,17 @@ void
   if (sig == SIG_ERR) ·close("air server can't catch SIGINT");
 }
 
-int
-:check_ip(self, addr_in_t * client) {
-  addr_in_t docker, mask;
-  inet_aton("172.17.0.0", &docker.sin_addr);
-  inet_aton("255.255.0.0.", &mask.sin_addr);
-  return ((client->sin_addr.s_addr & mask.sin_addr.s_addr) !=
-          (docker.sin_addr.s_addr & mask.sin_addr.s_addr));
-}
-
 void
 :accept(self) {
   ·set_interrupt;
   int leave = setjmp(catch);
   if (leave) return;
   while (1) {
-    addr_in_t client_addr = {0};
+    addr_store_t client_addr = {0};
     socklen_t client_addr_len = sizeof(client_addr);
     int fd = accept(@sockfd, (addr_t *) &client_addr, &client_addr_len);
     if (fd == -1) {
       perror("air server accept failed");
-      continue;
-    } else if (·check_ip(&client_addr)) {
-      perror("air server rejected");
-      close(fd);
       continue;
     }
     int ret = Worker.thread(fd);
@@ -236,12 +240,11 @@ void
 }
 
 void
-:run(uint16_t port) {
+:run(void) {
   · * self = Server.new();
-  addr_in_t addr = ·build_addr(port);
   ·setsockopt;
-  ·bind(&addr);
-  ·listen(port);
+  ·bind;
+  ·listen;
   ·accept;
   ·free;
 }

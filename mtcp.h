@@ -4,8 +4,11 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-typedef struct sockaddr_in addr_in_t;
-typedef struct sockaddr    addr_t;
+typedef struct sockaddr_in6     addr_in6_t;
+typedef struct sockaddr_in      addr_in_t;
+typedef struct sockaddr         addr_t;
+typedef struct sockaddr_storage addr_store_t;
+typedef struct addrinfo         addr_info_t;
 
 typedef struct {
   uint16_t txn;  /* transaction id */
