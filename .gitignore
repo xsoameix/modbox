@@ -21,6 +21,3 @@ compile.sh
 # objects & package
 *.c.c
 libair*
-
-# config
-config.h
