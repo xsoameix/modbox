@@ -198,6 +198,7 @@ void
   Common.addr_ntop(@addr->ai_addr, addr, sizeof(addr));
   Common.port_ntop(@addr->ai_addr, &port);
   printf("Listening on %s:%" PRIu16 "\n", addr, port);
+  fflush(stdout);
 }
 
 void
@@ -211,7 +212,8 @@ static jmp_buf catch = {0};
 
 void
 :interrupt(int signo) {
-  putchar('\n');
+  puts("Exit");
+  fflush(stdout);
   longjmp(catch, 1);
 }
 
