@@ -33,6 +33,8 @@
 
 void
 :free(self) {
+  puts("connection closed");
+  fflush(stdout);
   close(@sockfd);
   free(self);
 }
@@ -96,21 +98,43 @@ int
   return 0;
 }
 
-void *
-:run(void * fd) {
-  jmp_buf wfail = {0}, cfail = {0};
-  · * self = Worker.new(fd, &wfail);
+void
+:connect_and_transfer(self) {
+  int connected = 1;
+  jmp_buf connect = {0};
   client_t * client = 0;
   atcp_t atcp = {0};
-  int wfailed = setjmp(wfail), cfailed = setjmp(cfail);
-  if (cfailed) client·free;
-  if (!wfailed) {
-    client = Client.new(&cfail);
+  if (!setjmp(connect)) {
+    client = Client.new(&connect);
     client·connect;
-    if (cfailed) ·resend(client, &atcp);
-    while (·proxy(client, &atcp) == 0);
+    connected = 0;
+    while (!·proxy(client, &atcp));
+  } else {
+    if (connected) {
+      client·free;
+      return;
+    } else {
+      client·free;
+      connected = 1;
+      sleep(1);
+      client = Client.new(&connect);
+      client·connect;
+      connected = 0;
+      ·resend(client, &atcp);
+      while (!·proxy(client, &atcp));
+    }
   }
-  client·free;
+}
+
+void *
+:run(void * fd) {
+  jmp_buf transfer = {0};
+  · * self = Worker.new(fd, &transfer);
+  puts("worker created");
+  fflush(stdout);
+  if (!setjmp(transfer)) ·connect_and_transfer;
+  puts("worker removed");
+  fflush(stdout);
   ·free;
   pthread_detach(pthread_self());
 }
@@ -236,6 +260,8 @@ void
       perror("air server accept failed");
       continue;
     }
+    puts("connection created");
+    fflush(stdout);
     int ret = Worker.thread(fd);
     if (ret == -1) continue;
   }
