@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 2.8)
 
 set(PROJECT air)
 set(PACKAGE "${PROJECT}.package")
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMakeModules/")
 
 macro(with_ext _NAME)
   set(AIR_SOURCES ${AIR_SOURCES} "${_NAME}.c.c")
@@ -20,4 +19,3 @@ add_executable(${PROJECT} air.c.c)
 target_link_libraries(${PROJECT} ${LIBS})
 
 add_subdirectory(scripts)
-add_subdirectory(test)

@@ -1,0 +1,23 @@
+{
+  "name": "air",
+  "version": "1.0.0",
+  "description": "a server with time-division multiplexing",
+  "main": "scripts/test_server.ls",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "sprintf-js": "^1.0.3"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@bitbucket.org/NCU-CSIE-SNMG/air.git"
+  },
+  "author": "Lien Chiang",
+  "license": "GPL-3.0",
+  "homepage": "https://bitbucket.org/NCU-CSIE-SNMG/air#readme"
+}

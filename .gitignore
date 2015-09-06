@@ -1,11 +1,11 @@
-# Compiled air
+# Executables
 air
 
 # Scripts
 scripts/save_fixtures
 
 # Test
-test/test_air
+scripts/test_client
 
 # Build files
 CMakeFiles/
@@ -21,3 +21,6 @@ compile.sh
 # objects & package
 *.c.c
 libair*
+
+# npm modules
+node_modules

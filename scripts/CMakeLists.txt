@@ -1,4 +1,4 @@
-add_custom_command(OUTPUT save_fixtures.c.c
-  COMMAND nitrogen save_fixtures.c DEPENDS save_fixtures.c)
-add_executable(save_fixtures save_fixtures.c.c)
-target_link_libraries(save_fixtures ${LIBS})
+add_custom_command(OUTPUT test_client.c.c
+  COMMAND nitrogen test_client.c DEPENDS test_client.c)
+add_executable(test_client test_client.c.c)
+target_link_libraries(test_client ${LIBS})

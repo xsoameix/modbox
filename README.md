@@ -1,18 +1,12 @@
-# Air
+# Introduction
 
-The glue between the modbus and airweb
+The glue between the modbus and your application.
 
-# For Maintenance
+A server with time-division multiplexing support.
 
-## Getted Started
+# Getted Started
 
-1.  Configure server ip, client ip and port
-
-        $ mv config_example.h config.h
-
-    Please edit SERVER_PORT, CLIENT_IP, CLIENT_PORT in config.h
-
-2.  Compile
+1.  Install
 
     The [nitrogen compiler](https://github.com/xsoameix/nitrogen)
     is used to generate c code, please install it first.
@@ -20,44 +14,36 @@ The glue between the modbus and airweb
         $ cmake .
         $ make
 
-3.  Then you can simply run server:
+2.  Then you can simply run server:
 
         $ ./air
-        Listening on port 2015
+        Listening on 127.0.0.1:60000
 
-## Bitbucket SSL key
+Press Ctrl + C or send SIGTERM to shutdown the server.
 
-    $ ssh-keygen -t rsa -C "air@airweb.csie.ncu.edu.tw"
-    Generating public/private rsa key pair.
-    Enter file in which to save the key (/home/xxx/.ssh/id_rsa): /home/xxx/air.key/id_rsa
-    Enter passphrase (empty for no passphrase): [Enter]
-    Enter same passphrase again: [Enter]
+# Environment Variables
 
-Please upload `id_rsa.pub` to bitbucket and deploy it to air
+`SENDER_ADDR`, `SENDER_PORT` set address and port of the server.
 
-    $ scp id_rsa id_rsa.pub air:/tmp
-    $ setfacl -m u:docker:r /tmp/{id_rsa,id_rsa.pub}
-    $ cp -t air/.ssh /tmp/{id_rsa,id_rsa.pub}
-    $ chmod 600 air/.ssh/id_rsa
-    $ rm /tmp/{id_rsa,id_rsa.pub}
+eg:
 
+    $ CONNECT_ADDR=127.0.0.1 CONNECT_PORT=40000 ./air
+    Listening on 127.0.0.1:40000
 
-## Security Setting
+    $ SENDER_ADDR=::1 SENDER_PORT=40000 ./air
+    Listening on ::1:40000
 
-![Security Setting](raw/master/deploy/security_setting.png)
+`CONNECT_ADDR`, `CONNECT_PORT` set address and port of the client.
 
-The password is saved in the file `deploy/pass`.
-If you update the password, please remember to update the file `deploy/pass`.
-PS. Although I set the password, the web page is still fully OPEN orz...
+eg:
 
-# For Development
+    $ CONNECT_ADDR=192.168.1.1 CONNECT_PORT=400 ./air
 
-## Generate fixtures
+# Test
 
-    $ ./script/save_fixtures
+Please install ruby and nodejs first.
 
-The file `fixtures` is saved.
-
-## Test
-
-    $ ./test/test_air
+    $ npm install
+    $ ./scripts/test_worker.sh
+    $ ./scripts/test_server.ls
+    $ ./scripts/test_client
