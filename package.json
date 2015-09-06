@@ -1,7 +1,7 @@
 {
-  "name": "air",
+  "name": "modbox",
   "version": "1.0.0",
-  "description": "a server with time-division multiplexing",
+  "description": "A proxy server use time-division multiplexing to deliver packets to the modbus/tcp server",
   "main": "scripts/test_server.ls",
   "directories": {
     "test": "test"
@@ -15,9 +15,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@bitbucket.org/NCU-CSIE-SNMG/air.git"
+    "url": "git+ssh://git@github.com:xsoameix/modbox.git"
   },
   "author": "Lien Chiang",
   "license": "GPL-3.0",
-  "homepage": "https://bitbucket.org/NCU-CSIE-SNMG/air#readme"
+  "homepage": "https://github.com/xsoameix/modbox"
 }

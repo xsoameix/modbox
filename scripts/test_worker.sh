@@ -1,6 +1,6 @@
 #!/bin/bash
 
-valgrind --track-origins=yes --leak-check=full --log-file=$HOME/vglog ./air &
+valgrind --track-origins=yes --leak-check=full --log-file=$HOME/vglog ./modbox &
 pid=$!
 sleep 1
 read -r -d '' rubycode << RUBYCODE

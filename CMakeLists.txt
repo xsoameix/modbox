@@ -1,21 +1,21 @@
 cmake_minimum_required(VERSION 2.8)
 
-set(PROJECT air)
+set(PROJECT modbox)
 set(PACKAGE "${PROJECT}.package")
 
 macro(with_ext _NAME)
-  set(AIR_SOURCES ${AIR_SOURCES} "${_NAME}.c.c")
-  set(AIR_DEPENDS ${AIR_DEPENDS} "${_NAME}.c")
+  set(PROJECT_SOURCES ${PROJECT_SOURCES} "${_NAME}.c.c")
+  set(PROJECT_DEPENDS ${PROJECT_DEPENDS} "${_NAME}.c")
 endmacro(with_ext)
 with_ext("common")
 with_ext("client")
 with_ext("server")
 find_package(Threads)
-add_library(${PACKAGE} ${AIR_SOURCES})
+add_library(${PACKAGE} ${PROJECT_SOURCES})
 set(LIBS ${LIBS} ${PACKAGE} ${CMAKE_THREAD_LIBS_INIT})
-add_custom_command(OUTPUT air.c.c ${AIR_SOURCES}
-  COMMAND nitrogen air.c DEPENDS air.c ${AIR_DEPENDS})
-add_executable(${PROJECT} air.c.c)
+add_custom_command(OUTPUT modbox.c.c ${PROJECT_SOURCES}
+  COMMAND nitrogen modbox.c DEPENDS modbox.c ${PROJECT_DEPENDS})
+add_executable(${PROJECT} modbox.c.c)
 target_link_libraries(${PROJECT} ${LIBS})
 
 add_subdirectory(scripts)

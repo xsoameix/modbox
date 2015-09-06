@@ -1,8 +1,6 @@
 # Introduction
 
-The glue between the modbus and your application.
-
-A server with time-division multiplexing support.
+A proxy server use time-division multiplexing to deliver packets to the modbus/tcp server.
 
 # Getted Started
 
@@ -16,7 +14,7 @@ A server with time-division multiplexing support.
 
 2.  Then you can simply run server:
 
-        $ ./air
+        $ ./modbox
         Listening on 127.0.0.1:60000
 
 Press Ctrl + C or send SIGTERM to shutdown the server.
@@ -27,17 +25,17 @@ Press Ctrl + C or send SIGTERM to shutdown the server.
 
 eg:
 
-    $ CONNECT_ADDR=127.0.0.1 CONNECT_PORT=40000 ./air
+    $ CONNECT_ADDR=127.0.0.1 CONNECT_PORT=40000 ./modbox
     Listening on 127.0.0.1:40000
 
-    $ SENDER_ADDR=::1 SENDER_PORT=40000 ./air
+    $ SENDER_ADDR=::1 SENDER_PORT=40000 ./modbox
     Listening on ::1:40000
 
 `CONNECT_ADDR`, `CONNECT_PORT` set address and port of the client.
 
 eg:
 
-    $ CONNECT_ADDR=192.168.1.1 CONNECT_PORT=400 ./air
+    $ CONNECT_ADDR=192.168.1.1 CONNECT_PORT=400 ./modbox
 
 # Test
 

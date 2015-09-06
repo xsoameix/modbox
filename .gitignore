@@ -1,8 +1,5 @@
 # Executables
-air
-
-# Scripts
-scripts/save_fixtures
+modbox
 
 # Test
 scripts/test_client
@@ -20,7 +17,7 @@ compile.sh
 
 # objects & package
 *.c.c
-libair*
+libmodbox*
 
 # npm modules
 node_modules
