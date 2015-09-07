@@ -26,7 +26,6 @@ void
 void
 :sendto758(self) {
   setenv("CONNECT_ADDR", getenv("CONNECT_758_ADDR"), 1);
-  @client·connect;
   // id: 1  func: 0x3  panel: 2  addr: power  len: 1
   ·deliver("\0\0\0\0\x00\x06\x01\x03\x01\x13\x00\x01", 12);
   @client·close;
@@ -35,7 +34,6 @@ void
 void
 :sendtopan(self) {
   setenv("CONNECT_ADDR", getenv("CONNECT_PAN_ADDR"), 1);
-  @client·connect;
   // id: 1  func: 0x1  addr: power  len: 1
   ·deliver("\0\0\0\0\x00\x06\x01\x01\x00\x00\x00\x01", 12);
   @client·close;
