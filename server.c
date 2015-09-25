@@ -313,15 +313,24 @@ int
 void
 :getintr(int signo) {
   printf("receive %s signal\n", strsignal(signo)), fflush(stdout);
-  Server.setintr();
 }
 
 void
+:ignpipe(int signo) {}
+
+void
 :setintr(void) {
-  if (signal(SIGINT, Server.getintr) == SIG_ERR)
+  struct sigaction action;
+  action.sa_handler = Server.getintr;
+  action.sa_flags = 0;
+  sigemptyset(&action.sa_mask);
+  if (sigaction(SIGINT, &action, NULL) == -1)
     perror("server cannot catch SIGINT");
-  if (signal(SIGTERM, Server.getintr) == SIG_ERR)
+  if (sigaction(SIGTERM, &action, NULL) == -1)
     perror("server cannot catch SIGTERM");
+  action.sa_handler = Server.ignpipe;
+  if (sigaction(SIGPIPE, &action, NULL) == -1)
+    perror("server cannot catch SIGPIPE");
 }
 
 void
