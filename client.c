@@ -52,13 +52,14 @@ int
   getaddrinfo(Common.fetch_env_addr("CONNECT_ADDR", "127.0.0.1"),
               Common.fetch_env_port("CONNECT_PORT", "60001"), &hint, &res);
   if ((@sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol))==-1){
-    perror("cilent socket failed"); return 1;
+    perror("cilent socket failed"), freeaddrinfo(res); return 1;
   }
   if (connect(@sock, res->ai_addr, res->ai_addrlen) == -1) {
-    perror("client connect failed"), close(@sock); return 1;
+    perror("client connect failed"), close(@sock), freeaddrinfo(res); return 1;
   }
   puts("modbus connected"), fflush(stdout);
   @connected = 1;
+  freeaddrinfo(res);
   return 0;
 }
 

@@ -153,6 +153,7 @@ int
   if (·recvmph(&src, &slen)) return 1;
   @client·deliver(src, slen, &dst, &dlen);
   if (·sendmph(dst, dlen)) { free(dst), free(src); return 1; }
+  free(dst), free(src);
   return 0;
 }
 
