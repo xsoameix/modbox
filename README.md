@@ -41,6 +41,21 @@ Please install ruby and nodejs first.
 
     $ npm install -g livescript
     $ npm install
+
+## Test Worker
+
     $ ./scripts/test_worker.sh
-    $ ./scripts/test_server.ls
+
+## Test Client
+
     $ ./scripts/test_client
+
+## Test Server
+
+Open another terminal and run:
+
+    $ ./modbox
+
+Go back the original terminal and run:
+
+    $ ./scripts/test_server.ls
