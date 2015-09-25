@@ -47,15 +47,28 @@ void
 int
 :connect(self) {
   addr_info_t hint = {0}, * res;
+  struct timeval tv;
+  tv.tv_sec = 0;
+  tv.tv_usec = 500 * 1000;
   hint.ai_family = AF_UNSPEC;
   hint.ai_socktype = SOCK_STREAM;
   getaddrinfo(Common.fetch_env_addr("CONNECT_ADDR", "127.0.0.1"),
               Common.fetch_env_port("CONNECT_PORT", "60001"), &hint, &res);
   if ((@sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol))==-1){
-    perror("cilent socket failed"), freeaddrinfo(res); return 1;
+    perror("cilent socket failed");
+    freeaddrinfo(res); return 1;
+  }
+  if (setsockopt(@sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) == -1) {
+    perror("client setsockopt 'SO_SNDTIMEO' failed");
+    close(@sock), freeaddrinfo(res); return 1;
+  }
+  if (setsockopt(@sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1) {
+    perror("client setsockopt 'SO_RCVTIMEO' failed");
+    close(@sock), freeaddrinfo(res); return 1;
   }
   if (connect(@sock, res->ai_addr, res->ai_addrlen) == -1) {
-    perror("client connect failed"), close(@sock), freeaddrinfo(res); return 1;
+    perror("client connect failed");
+    close(@sock), freeaddrinfo(res); return 1;
   }
   puts("modbus connected"), fflush(stdout);
   @connected = 1;
@@ -100,11 +113,14 @@ void
     ·close, sleep(i), ·connect;
 }
 
-void
+int
 :recvm(self, void ** data, size_t * len) {
   mph_t head;
   size_t i;
-  for (i = 1; ; ·close, sleep(i), ·connect, i < 1024 && (i *= 2)) {
+  int fail = 0;
+  for (i = 1;; fail = 1) {
+    if (i >= 2) return 1;
+    if (fail) ·close, sleep(i), ·connect, i *= 2;
     if (·recv(&head, sizeof(head))) continue;
     head.txn = ntohs(head.txn);
     head.proto = ntohs(head.proto);
@@ -115,9 +131,12 @@ void
     * len = sizeof(uint16_t) + head.len;
     break;
   }
+  return 0;
 }
 
-void
+int
 :deliver(self, void * src, size_t slen, void ** dst, size_t * dlen) {
-  ·connect_modbus, ·sendm(src, slen), ·recvm(dst, dlen);
+  ·connect_modbus;
+  ·sendm(src, slen);
+  return ·recvm(dst, dlen);
 }

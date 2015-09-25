@@ -151,7 +151,7 @@ int
   void * src, * dst;
   size_t slen, dlen;
   if (·recvmph(&src, &slen)) return 1;
-  @client·deliver(src, slen, &dst, &dlen);
+  if (@client·deliver(src, slen, &dst, &dlen)) { free(src); return 1; }
   if (·sendmph(dst, dlen)) { free(dst), free(src); return 1; }
   free(dst), free(src);
   return 0;
