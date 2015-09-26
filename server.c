@@ -169,7 +169,7 @@ void *
     printf("  worker %zu running", @id);
     printf(" queue: ["), lpri(&@queue->run);
     printf("]\n"), fflush(stdout);
-    sleep(1);
+    //sleep(1);
     //i++, exit = i == 4;
     if (·deliver) exit = 1;
     pthread_mutex_lock(&@queue->run_mutex);
