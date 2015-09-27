@@ -55,9 +55,12 @@ ldel(list_t * list, node_t * node) {
   struct {
     node_t node; // MUST followed by `this` variable
     worker_t * this;
+    node_t rnode; // ready node
+    worker_t * rthis;
     pthread_cond_t cond;
     queue_t * queue;
     int sock;
+    int intr;
     client_t * client;
     pthread_t pid;
     size_t id;
@@ -73,14 +76,17 @@ lpri(list_t * list) {
 }
 
 · *
-:new(int sock, client_t * client, queue_t * queue, size_t id) {
+:new(int sock, client_t * client, queue_t * queue, int intr, size_t id) {
   · * self;
   if ((self = calloc(1, sizeof(·))) == NULL) {
     perror("worker calloc failed"); return NULL;
   }
   @class = &Worker;
   ninit(&@node);
+  ninit(&@rnode);
   @this = self;
+  @rthis = self;
+  @intr = intr;
   @cond = (pthread_cond_t) PTHREAD_COND_INITIALIZER;
   @queue = queue;
   @sock = sock;
@@ -127,13 +133,49 @@ int
 }
 
 int
+:rselect(self, void * buf, size_t len) {
+  int fdmax, i;
+  fd_set readset;
+  FD_ZERO(&readset);
+  FD_SET(@intr, &readset);
+  FD_SET(fdmax = @sock, &readset);
+  if (select(fdmax + 1, &readset, NULL, NULL, NULL) == -1) {
+    perror("  worker select failed"); return 1;
+  }
+  for (i = 0; i < fdmax + 1; i++) {
+    if (!FD_ISSET(i, &readset)) continue;
+    if (i == @sock) return ·recv(buf, len);
+    if (i == @intr) return 1;
+  }
+}
+
+int
+:sselect(self, void * buf, size_t len) {
+  int fdmax, i;
+  fd_set readset, writeset;
+  FD_ZERO(&readset);
+  FD_ZERO(&writeset);
+  FD_SET(@intr, &readset);
+  FD_SET(fdmax = @sock, &writeset);
+  if (select(fdmax + 1, &readset, &writeset, NULL, NULL) == -1) {
+    perror("  worker select failed"); return 1;
+  }
+  for (i = 0; i < fdmax + 1; i++) {
+    if (!FD_ISSET(i, &readset) &&
+        !FD_ISSET(i, &writeset)) continue;
+    if (i == @sock) return ·send(buf, len);
+    if (i == @intr) return 1;
+  }
+}
+
+int
 :recvmph(self, void ** data, size_t * len) {
   uint16_t pdulen;
   mph_t * head;
-  if (·recv(&pdulen, sizeof(uint16_t))) return 1;
+  if (·rselect(&pdulen, sizeof(uint16_t))) return 1;
   if (!(pdulen = ntohs(pdulen))) return 1;
   if ((head = * data = malloc(sizeof(mph_t) + pdulen)) == NULL) return 1;
-  if (·recv(* data + sizeof(mph_t), pdulen)) { free(* data); return 1; }
+  if (·rselect(* data + sizeof(mph_t), pdulen)) { free(* data); return 1; }
   head->txn = 0;
   head->proto = 0;
   head->len = htons(pdulen);
@@ -143,26 +185,26 @@ int
 
 int
 :sendmph(self, void * data, size_t len) {
-  return ·send(data, len);
+  return ·sselect(data, len);
 }
 
-int
-:deliver(self) {
-  void * src, * dst;
-  size_t slen, dlen;
-  if (·recvmph(&src, &slen)) return 1;
-  if (@client·deliver(src, slen, &dst, &dlen)) { free(src); return 1; }
-  if (·sendmph(dst, dlen)) { free(dst), free(src); return 1; }
-  free(dst), free(src);
-  return 0;
+void
+:del(self) {
+  pthread_mutex_lock(&@queue->run_mutex);
+  ldel(&@queue->run, &@node);
+  pthread_mutex_unlock(&@queue->run_mutex);
 }
 
 void *
 :run(void * arg) {
   · * self = arg;
+  void * src, * dst;
+  size_t slen, dlen;
   int exit = 0, i = 0;
   while (1) {
+    if (·recvmph(&src, &slen)) break;
     pthread_mutex_lock(&@queue->run_mutex);
+    lput(&@queue->run, &@node);
     while (@queue->run.head != &@node)
       pthread_cond_wait(&@cond, &@queue->run_mutex);
     pthread_mutex_unlock(&@queue->run_mutex);
@@ -171,15 +213,12 @@ void *
     printf("]\n"), fflush(stdout);
     //sleep(1);
     //i++, exit = i == 4;
-    if (·deliver) exit = 1;
-    pthread_mutex_lock(&@queue->run_mutex);
-    ldel(&@queue->run, &@node);
-    pthread_mutex_unlock(&@queue->run_mutex);
-    if (exit) break;
-    pthread_mutex_lock(&@queue->sleep_mutex);
-    lput(&@queue->ready, &@node);
-    pthread_mutex_unlock(&@queue->sleep_mutex);
-    pthread_cond_signal(&@queue->sleep_cond);
+    if (@client·deliver(src, slen, &dst, &dlen)) { free(src), ·del; break; }
+    ·del;
+    if (@queue->run.head != NULL)
+      pthread_cond_signal(&(* (worker_t **) (@queue->run.head + 1))->cond);
+    if (·sendmph(dst, dlen)) { free(dst), free(src); break; }
+    free(dst), free(src);
   }
   pthread_mutex_lock(&@queue->sleep_mutex);
   lput(&@queue->sleep, &@node);
@@ -192,6 +231,7 @@ void *
 
   struct {
     int sock;
+    int intr[2]; // used to close pthreads
     queue_t queue;
     client_t * client;
   }
@@ -204,6 +244,9 @@ void *
     perror("server calloc failed"); return NULL;
   }
   @class = &Server;
+  if (pipe(@intr) == -1) {
+    perror("server pipe failed"), free(self); return NULL;
+  }
   linit(&@queue.run);
   linit(&@queue.ready);
   linit(&@queue.sleep);
@@ -219,35 +262,25 @@ void *
 void *
 :clean(void * arg) {
   · * self = arg;
+  node_t * node;
   worker_t * worker;
-  int exit = 0, empty = 1;
-  while (!exit) {
+  int exit;
+  for (exit = 0; !exit; exit = @queue.ready.head == NULL && @queue.finished) {
     pthread_mutex_lock(&@queue.sleep_mutex);
-    while (@queue.ready.head == NULL &&
-           @queue.sleep.head == NULL && !(@queue.finished && empty))
+    while (@queue.sleep.head == NULL &&
+           !(@queue.ready.head == NULL && @queue.finished)) {
       pthread_cond_wait(&@queue.sleep_cond, &@queue.sleep_mutex);
-    if (@queue.ready.head != NULL) {
-      worker = * (worker_t **) (@queue.ready.head + 1);
-      ldel(&@queue.ready, &worker->node);
-      pthread_mutex_lock(&@queue.run_mutex);
-      lput(&@queue.run, &worker->node);
-      pthread_mutex_unlock(&@queue.run_mutex);
-      empty = 0;
-    } else if (@queue.sleep.head != NULL) {
+    }
+    if (@queue.sleep.head != NULL) {
       worker = * (worker_t **) (@queue.sleep.head + 1);
       if (pthread_join(worker->pid, NULL))
         perror("server pthread_join worker failed");
       printf("  worker %zu deleted\n", worker->id), fflush(stdout);
       ldel(&@queue.sleep, &worker->node);
+      ldel(&@queue.ready, &worker->rnode);
       worker·free;
-      pthread_mutex_lock(&@queue.run_mutex);
-      empty = @queue.run.head == NULL;
-      exit = empty && @queue.finished;
-      pthread_mutex_unlock(&@queue.run_mutex);
-    } else {
-      exit = 1;
     }
-    if (!empty)
+    if (@queue.run.head != NULL)
       pthread_cond_signal(&(* (worker_t **) (@queue.run.head + 1))->cond);
     pthread_mutex_unlock(&@queue.sleep_mutex);
   }
@@ -257,6 +290,7 @@ void *
 void
 :free(self) {
   if (@queue.cleanup) {
+    write(@intr[1], "\0", 1);
     pthread_mutex_lock(&@queue.sleep_mutex);
     @queue.finished = 1;
     pthread_mutex_unlock(&@queue.sleep_mutex);
@@ -267,6 +301,7 @@ void
   }
   if (@client != NULL) @client·free;
   close(@sock);
+  close(@intr[1]), close(@intr[0]);
   free(self);
   puts("Exit");
 }
@@ -336,7 +371,7 @@ void
 void
 :thread(self, int sock, size_t id) {
   worker_t * worker;
-  if ((worker = Worker.new(sock, @client, &@queue, id)) == NULL) {
+  if ((worker = Worker.new(sock, @client, &@queue, @intr[0], id)) == NULL) {
     close(sock); return;
   }
   if (pthread_create(&worker->pid, NULL, Worker.run, worker) == -1) {
@@ -344,10 +379,9 @@ void
     worker·free; return;
   }
   pthread_mutex_lock(&@queue.sleep_mutex);
-  lput(&@queue.ready, &worker->node);
+  lput(&@queue.ready, &worker->rnode);
   printf("  worker %zu created\n", worker->id), fflush(stdout);
   pthread_mutex_unlock(&@queue.sleep_mutex);
-  pthread_cond_signal(&@queue.sleep_cond);
 }
 
 void

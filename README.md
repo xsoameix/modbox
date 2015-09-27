@@ -52,10 +52,37 @@ Please install ruby and nodejs first.
 
 ## Test Server
 
-Open another terminal and run:
+Run this in the first terminal:
 
-    $ ./modbox
+    $ valgrind --leak-check=full --log-file=$HOME/vglog ./modbox
 
-Go back the original terminal and run:
+### Scenario 1
+
+Run this in the second terminal:
 
     $ ./scripts/test_server.ls
+
+Enter `Ctrl + C` in the first terminal **when** `./scripts/test_server.ls` was sending the commands.
+Checkout if there is memory leak by viewing `$HOME/vglog` file.
+
+### Scenario 2
+
+Run this in the second terminal:
+
+    $ ./scripts/test_server.ls
+
+Enter `Ctrl + C` in the first terminal **after** `./scripts/test_server.ls` was sending the commands.
+Checkout if there is memory leak by viewing `$HOME/vglog` file.
+
+### Scenario 3
+
+Run this in the second terminal:
+
+    $ ./scripts/test_server.ls
+
+Run this in the third terminal:
+
+    $ telnet 127.0.0.1 60000
+
+Enter `Ctrl + C` in the first terminal **after** `./scripts/test_server.ls` was sending the commands.
+Checkout if all connections are destroyed and there is memory leak by viewing `$HOME/vglog` file.
